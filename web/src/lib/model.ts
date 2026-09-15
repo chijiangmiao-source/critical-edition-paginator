@@ -20,11 +20,12 @@ export interface FootnoteDraft {
 export interface DirectiveDraft {
   key: string
   kind: DirectiveKind
-  /** 以段落的内部 key 关联：段落 id 改名后引用仍然有效 */
-  paragraphKey: string
-  /** 段落被删除时的 id 快照：仍随请求发送，由后端判为 paragraph_not_found 并就地标出 */
-  paragraphIdSnapshot: string
-  /** 段内 1 基行号；lock 段界时填段落末行 */
+  /**
+   * 持久身份：段落 ID（非内部键）+ 段内行号。
+   * 段落改名即构成 id 失配：指令不随名称迁移，提交后由后端就地标失效。
+   */
+  paragraphId: string
+  /** 段内 1 基行号；lock 段界时填段落末行；段界 no_split 同样填末行 */
   lineInParagraph: number
 }
 
@@ -109,19 +110,19 @@ export function buildRequest(draft: Draft): BuildResult {
       height: f.height,
     })
   }
-  // 指令：段落失配 / 行号越界 / 位置非法不在客户端拦截，原样发送由后端就地标出，
-  // 以保留其余编辑内容；这里只拦截「非正整数」这类无法序列化的格式错误。
+  // 指令以「段落 ID + 段内行号」为持久身份：段落改名 / 删除即 id 失配，
+  // 行号越界 / 位置非法同样不拦截，原样发送由后端就地标出，以保留其余编辑内容；
+  // 这里只拦截「非正整数」这类无法序列化的格式错误。
   const directives: NonNullable<PaginateRequest['directives']> = []
   for (const d of draft.directives) {
     if (!Number.isInteger(d.lineInParagraph) || d.lineInParagraph < 1) {
       errors.push(
-        `版式指令（${d.paragraphIdSnapshot || '?'} 第 ${d.lineInParagraph} 行）的行号须为正整数`,
+        `版式指令（${d.paragraphId || '?'} 第 ${d.lineInParagraph} 行）的行号须为正整数`,
       )
     }
-    const para = byKey.get(d.paragraphKey)
     directives.push({
       kind: d.kind,
-      paragraph_id: para ? para.id : d.paragraphIdSnapshot,
+      paragraph_id: d.paragraphId,
       line_in_paragraph: d.lineInParagraph,
     })
   }

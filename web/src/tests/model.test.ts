@@ -130,8 +130,8 @@ describe('buildRequest · 版式指令', () => {
     const built = buildRequest(
       draft({
         directives: [
-          { key: 'd1', kind: 'lock_break', paragraphKey: 'k1', paragraphIdSnapshot: 'p1', lineInParagraph: 2 },
-          { key: 'd2', kind: 'no_split', paragraphKey: 'k2', paragraphIdSnapshot: 'p2', lineInParagraph: 3 },
+          { key: 'd1', kind: 'lock_break', paragraphId: 'p1', lineInParagraph: 2 },
+          { key: 'd2', kind: 'no_split', paragraphId: 'p2', lineInParagraph: 3 },
         ],
       }),
     )
@@ -143,27 +143,29 @@ describe('buildRequest · 版式指令', () => {
     ])
   })
 
-  it('段落改名后指令仍跟随当前 id（按内部 key 关联）', () => {
+  it('指令按段落 ID 持久化：段落改名后仍发送原 ID（不随名称迁移，由后端判失配）', () => {
     const d = draft({
       directives: [
-        { key: 'd1', kind: 'lock_break', paragraphKey: 'k1', paragraphIdSnapshot: 'p1', lineInParagraph: 2 },
+        { key: 'd1', kind: 'lock_break', paragraphId: 'p1', lineInParagraph: 2 },
       ],
     })
     d.paragraphs[0] = { ...d.paragraphs[0], id: 'p1-renamed' }
     const built = buildRequest(d)
     expect(built.ok).toBe(true)
     if (!built.ok) return
+    // 请求中的段落已是新 id，指令仍持旧 id，提交后由后端判 paragraph_not_found
+    expect(built.request.paragraphs[0].id).toBe('p1-renamed')
     expect(built.request.directives).toEqual([
-      { kind: 'lock_break', paragraph_id: 'p1-renamed', line_in_paragraph: 2 },
+      { kind: 'lock_break', paragraph_id: 'p1', line_in_paragraph: 2 },
     ])
   })
 
-  it('目标段落删除后仍按 id 快照发送，交后端就地标失效（不拦截其余编辑）', () => {
+  it('目标段落删除后仍按原 id 发送，交后端就地标失效（不拦截其余编辑）', () => {
     const built = buildRequest(
       draft({
         paragraphs: [{ key: 'k1', id: 'p1', lines: 3, keepWithNext: false }],
         directives: [
-          { key: 'd1', kind: 'lock_break', paragraphKey: 'ghost', paragraphIdSnapshot: 'p9', lineInParagraph: 2 },
+          { key: 'd1', kind: 'lock_break', paragraphId: 'p9', lineInParagraph: 2 },
         ],
       }),
     )
@@ -178,7 +180,7 @@ describe('buildRequest · 版式指令', () => {
     const built = buildRequest(
       draft({
         directives: [
-          { key: 'd1', kind: 'lock_break', paragraphKey: 'k1', paragraphIdSnapshot: 'p1', lineInParagraph: 99 },
+          { key: 'd1', kind: 'lock_break', paragraphId: 'p1', lineInParagraph: 99 },
         ],
       }),
     )
@@ -191,7 +193,7 @@ describe('buildRequest · 版式指令', () => {
     const built = buildRequest(
       draft({
         directives: [
-          { key: 'd1', kind: 'no_split', paragraphKey: 'k1', paragraphIdSnapshot: 'p1', lineInParagraph: 0 },
+          { key: 'd1', kind: 'no_split', paragraphId: 'p1', lineInParagraph: 0 },
         ],
       }),
     )

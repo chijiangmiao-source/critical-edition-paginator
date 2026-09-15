@@ -120,18 +120,32 @@ def test_illegal_positions_classified():
         directives=[
             (LOCK_BREAK, "p1", 1),   # 段内第 1 行后：首片段仅 1 行，非法
             (LOCK_BREAK, "p1", 4),   # 段内第 4 行后：末片段仅 1 行，非法
-            (LOCK_BREAK, "p2", 6),   # 末段末行：无断页可言，非法
-            (NO_SPLIT, "p1", 5),     # no_split 施于段界（第 5 行=末行），非法
-            (LOCK_BREAK, "p1", 5),   # 非末段段界：合法
+            (LOCK_BREAK, "p2", 6),   # 末段段界：无断页可言，非法
+            (NO_SPLIT, "p2", 6),     # 末段段界：无断页可禁，非法
+            (NO_SPLIT, "p1", 5),     # 非末段段界禁断：合法
+            (LOCK_BREAK, "p1", 5),   # 非末段段界锁定：合法
             (LOCK_BREAK, "p1", 2),   # 段内第 2 行后（两侧 ≥2）：合法
             (NO_SPLIT, "p1", 1),     # 段内第 1 行后：合法位置（虽本就非法断）
             (NO_SPLIT, "p1", 4),     # 段内第 4 行后：合法
         ],
     )
     valid, invalid = classify_directives(d)
-    assert {v.order for v in valid} == {4, 5, 6, 7}
+    assert {v.order for v in valid} == {4, 5, 6, 7, 8}
     assert {i.order for i in invalid} == {0, 1, 2, 3}
     assert all(i.reason == ILLEGAL_POSITION for i in invalid)
+
+
+def test_no_split_at_boundary_forces_paragraphs_together():
+    # H=10，p1=p2=4 行，n1@2 高3、n2@6 高2：无指令最优断段界 4（(4,8)）。
+    # 在段界（p1 第 4 行后）禁止断开 ⇒ 不得在 4 断页，最优改断第 2 行后。
+    sol = as_solution(solve(doc(
+        10, [("p1", 4, False), ("p2", 4, False)],
+        [("n1", 2, 3), ("n2", 6, 2)],
+        directives=[(NO_SPLIT, "p1", 4)],
+    )))
+    assert sol.ending_lines == (2, 8)
+    assert sol.violated_directives == ()
+    assert sol.invalid_directives == ()
 
 
 def test_lock_internal_on_short_paragraph_illegal():

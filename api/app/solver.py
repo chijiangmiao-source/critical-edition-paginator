@@ -19,9 +19,12 @@
 - ``lock_break``（必须保留）：施于段界（非末段的末行之后）或合法段内行位
   （段内第 i 行后，2 ≤ i ≤ 行数−2，保证两侧片段均 ≥ 2 行），要求该位置必须断页；
   某页跨过该行即违反该指令。
-- ``no_split``（禁止断开）：施于段内行位（1 ≤ i ≤ 行数−1），页末断点落在该行即违反。
-- 指令以 (段落 id, 段内行号) 定位；段落 id 失配、行号越界、位置不允许该类操作时，
-  该指令判为失效（不参与约束）并就地标出，其余指令照常生效。
+- ``no_split``（禁止断开）：施于段内行位（1 ≤ i ≤ 行数−1，页末不得落在该行）或
+  非末段的段界（i = 行数，禁止在该段界断页，效果等价于「与下段保持」）；
+  末段段界即文档结束，无断页可禁，判失效。
+- 指令以 (段落 id, 段内行号) 为持久身份；段落 id 失配、行号越界、位置不允许该类
+  操作时，该指令判为失效（不参与约束）并就地标出，其余指令照常生效。
+  段落改名即构成 id 失配——指令不随名称迁移。
 
 释放裁决（原文档可分页但全部指令不能同时满足时）：
 - 每条指令在任一具体分页下是否被违反是确定的，且违反责任可按页**加法**分摊
@@ -177,7 +180,9 @@ def classify_directives(
                 ))
                 continue
         elif d.kind == NO_SPLIT:
-            if line > n - 1:
+            is_internal = 1 <= line <= n - 1
+            is_boundary = line == n and idx < last_index  # 段界禁断
+            if not (is_internal or is_boundary):
                 invalid.append(InvalidDirective(
                     d.order, d.kind, d.paragraph_id, line, ILLEGAL_POSITION
                 ))

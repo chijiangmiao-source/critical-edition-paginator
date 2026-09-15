@@ -110,7 +110,7 @@ export default function App() {
     const lines = new Set<number>()
     draft.directives.forEach((d, order) => {
       if (d.kind !== 'lock_break' || releasedOrders.has(order) || invalidOrders.has(order)) return
-      const para = draft.paragraphs.find((p) => p.key === d.paragraphKey)
+      const para = draft.paragraphs.find((p) => p.id === d.paragraphId)
       if (!para) return
       lines.add((starts.get(para.id) ?? 1) + d.lineInParagraph - 1)
     })

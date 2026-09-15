@@ -10,10 +10,15 @@ interface Props {
 }
 
 const REASON_TEXT: Record<InvalidDirectiveReason, string> = {
-  paragraph_not_found: '段落已失配（目标段落不存在或已删除）',
+  paragraph_not_found: '段落 ID 已失配（段落已改名或删除）',
   line_out_of_range: '段内行号越界',
   illegal_position: '该位置不允许此操作',
 }
+
+const KIND_TEXT = {
+  lock_break: '必须保留',
+  no_split: '禁止断开',
+} as const
 
 export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChange }: Props) {
   const update = (key: string, patch: Partial<DirectiveDraft>) => {
@@ -33,12 +38,14 @@ export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChan
       {
         key: `k-dir-${Date.now()}-${directives.length + 1}`,
         kind: 'lock_break',
-        paragraphKey: first?.key ?? '',
-        paragraphIdSnapshot: first?.id ?? '',
+        paragraphId: first?.id ?? '',
         lineInParagraph: line,
       },
     ])
   }
+
+  const currentIds = new Set(paragraphs.map((p) => p.id))
+
   return (
     <section className="panel" aria-label="版式指令">
       <header className="panel-header">
@@ -53,8 +60,9 @@ export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChan
         </button>
       </header>
       <p className="muted hint">
-        「必须保留」施于段界或合法段内行（两侧片段均 ≥ 2 行）；「禁止断开」施于段内行。
-        目标行删除、行号越界或段落失配时就地标失效，不影响其余编辑。
+        「必须保留」「禁止断开」均可施于段界（非末段末行后）或合法段内行
+        （锁定须两侧片段均 ≥ 2 行）。指令按段落 ID 与段内行号保存；
+        段落改名、删除、目标行越界或位置非法时就地标失效，不影响其余编辑。
       </p>
       <table className="grid">
         <thead>
@@ -68,7 +76,7 @@ export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChan
         <tbody>
           {directives.map((d, order) => {
             const reason = invalidByOrder.get(order)
-            const paraExists = paragraphs.some((p) => p.key === d.paragraphKey)
+            const matched = currentIds.has(d.paragraphId)
             return (
               <tr
                 key={d.key}
@@ -83,28 +91,26 @@ export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChan
                       update(d.key, { kind: e.target.value as DirectiveDraft['kind'] })
                     }
                   >
-                    <option value="lock_break">必须保留</option>
-                    <option value="no_split">禁止断开</option>
+                    <option value="lock_break">{KIND_TEXT.lock_break}</option>
+                    <option value="no_split">{KIND_TEXT.no_split}</option>
                   </select>
                 </td>
                 <td>
                   <select
                     data-testid={`directive-paragraph-${order}`}
-                    value={d.paragraphKey}
-                    onChange={(e) => {
-                      const para = paragraphs.find((p) => p.key === e.target.value)
-                      update(d.key, {
-                        paragraphKey: e.target.value,
-                        paragraphIdSnapshot: para?.id ?? d.paragraphIdSnapshot,
-                      })
-                    }}
+                    value={matched ? d.paragraphId : `__missing__${order}`}
+                    onChange={(e) => update(d.key, { paragraphId: e.target.value })}
                   >
                     {paragraphs.map((p) => (
-                      <option key={p.key} value={p.key}>
+                      <option key={p.key} value={p.id}>
                         {p.id}
                       </option>
                     ))}
-                    {!paraExists && <option value={d.paragraphKey}>{d.paragraphIdSnapshot}（已删除）</option>}
+                    {!matched && (
+                      <option value={`__missing__${order}`}>
+                        {d.paragraphId || '(空)'}（已失配）
+                      </option>
+                    )}
                   </select>
                 </td>
                 <td>
@@ -139,7 +145,8 @@ export function DirectiveEditor({ directives, paragraphs, invalidByOrder, onChan
             className="directive-invalid-note"
             data-testid={`directive-invalid-${order}`}
           >
-            指令 #{order + 1} 已失效：{REASON_TEXT[reason]}
+            指令 #{order + 1}（{KIND_TEXT[d.kind]} · {d.paragraphId || '?'} 第{' '}
+            {d.lineInParagraph} 行后）已失效：{REASON_TEXT[reason]}
           </p>
         )
       })}

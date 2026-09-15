@@ -132,7 +132,8 @@ class BruteWorld:
             if kind == LOCK_BREAK:
                 legal = (line == n and pid != self.last_pid) or 2 <= line <= n - 2
             else:
-                legal = line <= n - 1
+                # 段内行 (1..n−1) 或非末段段界 (n)
+                legal = (1 <= line <= n - 1) or (line == n and pid != self.last_pid)
             if not legal:
                 self.invalid[order] = ILLEGAL_POSITION
                 continue

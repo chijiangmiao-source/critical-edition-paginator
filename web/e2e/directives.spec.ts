@@ -98,10 +98,49 @@ test('目标段落被删除：指令按段落失配标失效并保留', async ({
   await page.getByTestId('remove-paragraph-p3').click()
   await page.getByTestId('compute-button').click()
 
-  await expect(page.getByTestId('directive-invalid-0')).toContainText('段落已失配')
-  // 指令行仍保留在编辑器中（下拉显示已删除段落的 id 快照）
-  await expect(page.getByTestId('directive-paragraph-0')).toContainText('p3（已删除）')
+  await expect(page.getByTestId('directive-invalid-0')).toContainText('已失配')
+  // 指令行仍保留在编辑器中（下拉显示已删除段落的原 id）
+  await expect(page.getByTestId('directive-paragraph-0')).toContainText('p3（已失配）')
   await expect(page.locator('[data-testid="directive-row-0"]')).toBeVisible()
+})
+
+test('段界禁止断开：原本在段界的分页被移走', async ({ page }) => {
+  // H=6，p1、p2 各 4 行无注记：段界分页 (4,8) 平方和 8 最优。
+  await page.getByTestId('capacity-input').fill('6')
+  await page.getByTestId('keep-input-p1').uncheck()
+  await page.getByTestId('lines-input-p1').fill('4')
+  await page.getByTestId('lines-input-p2').fill('4')
+  await page.getByTestId('remove-footnote-n1').click()
+  await page.getByTestId('remove-footnote-n2').click()
+  await page.getByTestId('compute-button').click()
+  await expect(page.getByTestId('summary')).toContainText('[4, 8]')
+
+  // 在 p1 段界（第 4 行后）禁止断开：不得断在段界；(2,8) 与 (6,8) 并列，取字典序 (2,8)
+  await page.getByTestId('add-directive').click()
+  await page.getByTestId('directive-kind-0').selectOption('no_split')
+  await page.getByTestId('directive-line-0').fill('4')
+  await page.getByTestId('compute-button').click()
+  await expect(page.getByTestId('summary')).toContainText('[2, 8]')
+  await expect(page.getByTestId('directive-status')).toContainText('有效指令 1 条')
+  await expect(page.locator('[data-testid="directive-invalid-0"]')).toHaveCount(0)
+})
+
+test('段落改名后，原锁定指令不迁移、按段落 ID 失配标失效', async ({ page }) => {
+  await page.getByTestId('capacity-input').fill('10')
+  // 对 p1 第 5 行（段界）加锁定
+  await page.getByTestId('add-directive').click()
+  await page.getByTestId('directive-line-0').fill('5')
+  await page.getByTestId('compute-button').click()
+  await expect(page.locator('[data-testid="directive-invalid-0"]')).toHaveCount(0)
+
+  // 段落 p1 改名为 p1x：指令仍持旧 id p1，重算后就地标失效，不作用到 p1x
+  await page.getByTestId('paragraph-id-k-p1').fill('p1x')
+  await page.getByTestId('compute-button').click()
+  await expect(page.getByTestId('directive-invalid-0')).toBeVisible()
+  await expect(page.getByTestId('directive-invalid-0')).toContainText('段落 ID 已失配')
+  await expect(page.getByTestId('directive-status')).toContainText('失效 1 条')
+  // 下拉中旧 id 以「已失配」形式保留，未被静默改绑到 p1x
+  await expect(page.getByTestId('directive-paragraph-0')).toContainText('p1（已失配）')
 })
 
 test('原文档本身无解时显示最短不可行前缀，不混入指令归因', async ({ page }) => {

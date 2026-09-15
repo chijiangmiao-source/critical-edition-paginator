@@ -206,7 +206,7 @@ def test_invalid_directives_are_localized_and_others_apply():
             {"kind": "lock_break", "paragraph_id": "ghost", "line_in_paragraph": 1},
             {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 9},
             {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 1},
-            {"kind": "no_split", "paragraph_id": "p1", "line_in_paragraph": 5},
+            {"kind": "no_split", "paragraph_id": "p2", "line_in_paragraph": 5},
             {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 5},
         ],
     })
