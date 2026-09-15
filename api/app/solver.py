@@ -7,9 +7,10 @@
 
 约束模型：
 - 正文每行占 1 单位容量；注记不可拆分，按其标记行计入所在页，占 height 单位。
-- 段落跨页时，断点两侧均须至少 2 行。
+- 段落被拆分后，其在每一页上的片段（段首至首个断点、相邻断点之间、
+  末个断点至段尾）均须 ≥ 2 行；未被拆分的段不受此限。
 - 「与下段保持」：本段末行与下段前两行须同页。
-  由于段内两行规则已禁止在下段第 1 行之后断页（否则下段一侧仅 1 行），
+  由于片段规则已禁止在下段第 1 行之后断页（否则下段首片段仅 1 行），
   保持约束等价于禁止在本段末行（段界）断页；下段仅 1 行时该等价依然成立。
 - 末段的保持标记无下段可引，按规则忽略（前缀求解时同理：
   仅当被引用的下一段已在求解范围内时才检查保持约束）。
@@ -78,28 +79,25 @@ def paragraph_spans(paragraphs: tuple[Paragraph, ...]) -> tuple[tuple[int, int],
     return tuple(spans)
 
 
-def _forbidden_breaks(
+def _keep_forbidden_breaks(
     paragraphs: tuple[Paragraph, ...], spans: tuple[tuple[int, int], ...]
 ) -> frozenset[int]:
-    """禁止在该全局行号之后断页的位置集合（行号 < 总行数）。"""
-    forbidden: set[int] = set()
+    """保持约束禁止的断点：段末行之后（末段无下段，不检查）。"""
     last = len(paragraphs) - 1
-    for i, (p, (s, e)) in enumerate(zip(paragraphs, spans)):
-        # 段内断点：两侧均须 ≥ 2 行
-        for b in range(s, e):
-            if b - s + 1 < 2 or e - b < 2:
-                forbidden.add(b)
-        # 保持约束：禁止在本段末行断页（末段无下段，不检查）
-        if i < last and p.keep_with_next:
-            forbidden.add(e)
-    return frozenset(forbidden)
+    return frozenset(
+        spans[i][1] for i in range(last) if paragraphs[i].keep_with_next
+    )
 
 
 def _solve_whole(doc: Document) -> Solution | None:
     """对整篇（或某个前缀子篇）求最优分页；无解返回 None。"""
     spans = paragraph_spans(doc.paragraphs)
     total = spans[-1][1]
-    forbidden = _forbidden_breaks(doc.paragraphs, spans)
+    keep_forbidden = _keep_forbidden_breaks(doc.paragraphs, spans)
+    para_of = [0] * (total + 1)
+    for idx, (s, e) in enumerate(spans):
+        for line in range(s, e + 1):
+            para_of[line] = idx
 
     # note_prefix[x] = 标记行 ≤ x 的注记高度和
     note_prefix = [0] * (total + 1)
@@ -117,17 +115,33 @@ def _solve_whole(doc: Document) -> Solution | None:
     best[total] = (0, 0)
     nxt: list[int | None] = [None] * (total + 1)
     for b in range(total - 1, -1, -1):
+        # 若断点 b 落在段内（切开该段），则本页合上该段时末片段须 ≥ 2 行
+        open_para_end = -1
+        if b >= 1:
+            si, ei = spans[para_of[b]]
+            if si <= b < ei:
+                open_para_end = ei
         winner: tuple[int, int] | None = None
         winner_bp: int | None = None
         for bp in range(b + 1, total + 1):
-            if bp < total and bp in forbidden:
-                continue
             used = load(b, bp)
             if used > doc.capacity:
                 break  # 占用随 bp 单调不减，可提前终止
             tail = best[bp]
             if tail is None:
                 continue
+            if bp < total:
+                if bp in keep_forbidden:
+                    continue
+                sj, ej = spans[para_of[bp]]
+                if sj <= bp < ej:
+                    # 段内断点：本页收尾的片段（首片段或中间片段）须 ≥ 2 行
+                    if bp - max(b, sj - 1) < 2:
+                        continue
+            if open_para_end >= 0 and bp >= open_para_end:
+                # 断点 b 所在段在本页结束：末片段须 ≥ 2 行
+                if open_para_end - b < 2:
+                    continue
             cand = (tail[0] + 1, tail[1] + (doc.capacity - used) ** 2)
             # bp 递增枚举，严格小于才替换 ⇒ 同值时保留最小断点，
             # 重建时即得字典序最小的结束行号序列

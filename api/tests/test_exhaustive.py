@@ -3,7 +3,7 @@
 暴力器直接按题面语义实现（不做保持约束的等价归约），与求解器相互独立：
 - 逐一枚举断点子集；
 - 逐页检查容量（正文行数 + 页内注记高度和 ≤ H）；
-- 段内断点两侧均须 ≥ 2 行；
+- 段被拆分后，其在每一页上的片段均须 ≥ 2 行；
 - 保持约束直接检查「本段末行与下段前两行同页」；
 - 目标依次为 (页数, 剩余容量平方和, 结束行号序列字典序)。
 """
@@ -29,10 +29,6 @@ def brute_optimal(capacity: int, paragraphs: list[Para], footnotes: list[Note]):
     """返回 (结束行号序列, 剩余容量平方和)；无解返回 None。"""
     total = sum(lines for _, lines, _ in paragraphs)
     spans = _spans(paragraphs)
-    para_of = [0] * (total + 1)
-    for idx, (s, e) in enumerate(spans):
-        for line in range(s, e + 1):
-            para_of[line] = idx
 
     best: tuple[tuple[int, int, tuple[int, ...]], tuple[int, ...], int] | None = None
     for mask in range(1 << max(total - 1, 0)):
@@ -50,12 +46,13 @@ def brute_optimal(capacity: int, paragraphs: list[Para], footnotes: list[Note]):
             prev = end
         if not ok:
             continue
-        # 段内断点两侧 ≥ 2 行（段界断点不适用）
-        for b in breaks:
-            s, e = spans[para_of[b]]
-            if b == e:
+        # 段被拆分后，其在每一页上的片段均须 ≥ 2 行（未拆分的段不受限）
+        for s, e in spans:
+            internal = [b for b in breaks if s <= b < e]
+            if not internal:
                 continue
-            if b - s + 1 < 2 or e - b < 2:
+            cuts = [s - 1, *internal, e]
+            if any(cuts[k + 1] - cuts[k] < 2 for k in range(len(cuts) - 1)):
                 ok = False
                 break
         if not ok:

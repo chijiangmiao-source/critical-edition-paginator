@@ -29,6 +29,12 @@ test('编辑篇章结构：容量、段落增删改、保持标记、注记增�
   // 删除段落
   await page.getByTestId('remove-paragraph-p3').click()
   await expect(page.locator('[data-testid^="paragraph-row-"]')).toHaveCount(2)
+
+  // 段落改名后，注记下拉仍关联同一段落（按内部键而非 id 关联）
+  await page.getByTestId('paragraph-id-k-p1').fill('p1x')
+  await expect(
+    page.getByTestId('footnote-paragraph-n1').locator('option:checked'),
+  ).toHaveText('p1x')
 })
 
 test('成功预览：页卡片、容量算式、页下注与断点', async ({ page }) => {

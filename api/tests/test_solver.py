@@ -78,6 +78,31 @@ def test_paragraph_split_balances_pages():
     assert sol.squared_slack == 2
 
 
+def test_one_line_middle_fragment_is_rejected():
+    # 5 行段、H=2：2+1+2 的中间页片段仅 1 行，不合法；
+    # 片段均须 ≥ 2 行 ⇒ 每页恰 2 行，5 行为奇数，该段无法合法分页。
+    failure = as_failure(solve(doc(2, [("p1", 5, False)])))
+    assert failure.paragraph_index == 1
+    assert failure.paragraph_id == "p1"
+    assert failure.prefix_end_line == 5
+    assert failure.footnotes == ()
+
+
+def test_split_into_full_two_line_fragments():
+    # 6 行段、H=2：唯一合法方案 2+2+2，每页片段均为 2 行。
+    sol = as_solution(solve(doc(2, [("p1", 6, False)])))
+    assert sol.ending_lines == (2, 4, 6)
+    assert sol.squared_slack == 0
+
+
+def test_fragment_rule_with_lexicographic_tie():
+    # 7 行段、H=3：合法切分为 2+2+3 / 2+3+2 / 3+2+2，剩余平方和均为 2，
+    # 取结束行号序列字典序最小者 (2, 4, 7)。
+    sol = as_solution(solve(doc(3, [("p1", 7, False)])))
+    assert sol.ending_lines == (2, 4, 7)
+    assert sol.squared_slack == 2
+
+
 def test_failure_lists_prefix_footnotes_in_marker_then_input_order():
     # H=3，三段各两行；n2、n3 标记第 3 行（高 3、1），n1 标记第 5 行。
     # 含第 3 行的页至少占 1+3+1=5 > 3 ⇒ 前两段即不可行；n1 不在前缀内。

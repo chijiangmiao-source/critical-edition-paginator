@@ -11,7 +11,8 @@ export interface ParagraphDraft {
 export interface FootnoteDraft {
   key: string
   id: string
-  paragraphId: string
+  /** 以段落的内部 key 关联：段落 id 改名后引用仍然有效 */
+  paragraphKey: string
   lineInParagraph: number
   height: number
 }
@@ -66,16 +67,16 @@ export function buildRequest(draft: Draft): BuildResult {
     }
   }
   const starts = paragraphStartLines(draft.paragraphs)
-  const byId = new Map(draft.paragraphs.map((p) => [p.id, p]))
+  const byKey = new Map(draft.paragraphs.map((p) => [p.key, p]))
   const footnoteIds = new Set<string>()
   const footnotes: PaginateRequest['footnotes'] = []
   for (const f of draft.footnotes) {
     if (!f.id.trim()) errors.push('注记 id 不能为空')
     if (footnoteIds.has(f.id)) errors.push(`注记 id 重复：${f.id}`)
     footnoteIds.add(f.id)
-    const para = byId.get(f.paragraphId)
+    const para = byKey.get(f.paragraphKey)
     if (!para) {
-      errors.push(`注记 ${f.id || '(未命名)'} 引用了不存在的段落 ${f.paragraphId}`)
+      errors.push(`注记 ${f.id || '(未命名)'} 引用的段落不存在（可能已被删除）`)
       continue
     }
     if (

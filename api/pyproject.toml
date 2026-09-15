@@ -6,4 +6,6 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 显式声明导入根：pytest 控制台脚本（如 verify 镜像）不会把 CWD 加入 sys.path
+pythonpath = ["."]
 addopts = "-q"

@@ -17,13 +17,13 @@ export function FootnoteEditor({ footnotes, paragraphs, onChange }: Props) {
     const used = new Set(footnotes.map((f) => f.id))
     let n = footnotes.length + 1
     while (used.has(`n${n}`)) n += 1
-    const firstParagraph = paragraphs[0]?.id ?? ''
+    const firstParagraph = paragraphs[0]?.key ?? ''
     onChange([
       ...footnotes,
       {
         key: `k${Date.now()}-${n}`,
         id: `n${n}`,
-        paragraphId: firstParagraph,
+        paragraphKey: firstParagraph,
         lineInParagraph: 1,
         height: 1,
       },
@@ -65,11 +65,11 @@ export function FootnoteEditor({ footnotes, paragraphs, onChange }: Props) {
               <td>
                 <select
                   data-testid={`footnote-paragraph-${f.id}`}
-                  value={f.paragraphId}
-                  onChange={(e) => update(f.key, { paragraphId: e.target.value })}
+                  value={f.paragraphKey}
+                  onChange={(e) => update(f.key, { paragraphKey: e.target.value })}
                 >
                   {paragraphs.map((p) => (
-                    <option key={p.key} value={p.id}>
+                    <option key={p.key} value={p.key}>
                       {p.id}
                     </option>
                   ))}

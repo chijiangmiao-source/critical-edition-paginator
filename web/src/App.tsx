@@ -14,8 +14,8 @@ const initialDraft: Draft = {
     { key: 'k-p2', id: 'p2', lines: 6, keepWithNext: false },
   ],
   footnotes: [
-    { key: 'k-n1', id: 'n1', paragraphId: 'p1', lineInParagraph: 2, height: 2 },
-    { key: 'k-n2', id: 'n2', paragraphId: 'p2', lineInParagraph: 4, height: 3 },
+    { key: 'k-n1', id: 'n1', paragraphKey: 'k-p1', lineInParagraph: 2, height: 2 },
+    { key: 'k-n2', id: 'n2', paragraphKey: 'k-p2', lineInParagraph: 4, height: 3 },
   ],
 }
 
