@@ -1,10 +1,22 @@
-import type { FailureOut } from '../lib/types'
+import type { FailureOut, InvalidDirectiveOut, InvalidDirectiveReason } from '../lib/types'
 
 interface Props {
   failure: FailureOut
+  invalidDirectives?: InvalidDirectiveOut[]
 }
 
-export function FailurePanel({ failure }: Props) {
+const REASON_TEXT: Record<InvalidDirectiveReason, string> = {
+  paragraph_not_found: '段落 id 失配（目标段落不存在）',
+  line_out_of_range: '段内行号越界',
+  illegal_position: '该位置不允许此操作',
+}
+
+const KIND_TEXT = {
+  lock_break: '必须保留',
+  no_split: '禁止断开',
+} as const
+
+export function FailurePanel({ failure, invalidDirectives = [] }: Props) {
   return (
     <div className="failure-panel" data-testid="failure-panel" role="alert">
       <h3>无法完成分页</h3>
@@ -28,6 +40,22 @@ export function FailurePanel({ failure }: Props) {
             </li>
           ))}
         </ul>
+      )}
+      <p className="failure-note" data-testid="failure-directive-note">
+        该无解源于篇章本身（容量 / 片段 / 保持约束），与版式指令无关，不作指令归因。
+      </p>
+      {invalidDirectives.length > 0 && (
+        <div className="failure-invalid-directives" data-testid="failure-invalid-directives">
+          <h4>失效指令（未参与求解）</h4>
+          <ul>
+            {invalidDirectives.map((d) => (
+              <li key={d.order} data-testid={`failure-invalid-directive-${d.order}`}>
+                #{d.order + 1} {KIND_TEXT[d.kind]} · 段落 {d.paragraph_id} 第{' '}
+                {d.line_in_paragraph} 行后：{REASON_TEXT[d.reason]}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   )

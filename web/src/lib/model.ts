@@ -1,5 +1,5 @@
 /** 编辑器草稿模型：校验并转换为 API 请求（标记行换算为全局行号）。 */
-import type { PaginateRequest } from './types'
+import type { DirectiveKind, PaginateRequest } from './types'
 
 export interface ParagraphDraft {
   key: string
@@ -17,10 +17,22 @@ export interface FootnoteDraft {
   height: number
 }
 
+export interface DirectiveDraft {
+  key: string
+  kind: DirectiveKind
+  /** 以段落的内部 key 关联：段落 id 改名后引用仍然有效 */
+  paragraphKey: string
+  /** 段落被删除时的 id 快照：仍随请求发送，由后端判为 paragraph_not_found 并就地标出 */
+  paragraphIdSnapshot: string
+  /** 段内 1 基行号；lock 段界时填段落末行 */
+  lineInParagraph: number
+}
+
 export interface Draft {
   capacity: number
   paragraphs: ParagraphDraft[]
   footnotes: FootnoteDraft[]
+  directives: DirectiveDraft[]
 }
 
 let keyCounter = 0
@@ -97,6 +109,22 @@ export function buildRequest(draft: Draft): BuildResult {
       height: f.height,
     })
   }
+  // 指令：段落失配 / 行号越界 / 位置非法不在客户端拦截，原样发送由后端就地标出，
+  // 以保留其余编辑内容；这里只拦截「非正整数」这类无法序列化的格式错误。
+  const directives: NonNullable<PaginateRequest['directives']> = []
+  for (const d of draft.directives) {
+    if (!Number.isInteger(d.lineInParagraph) || d.lineInParagraph < 1) {
+      errors.push(
+        `版式指令（${d.paragraphIdSnapshot || '?'} 第 ${d.lineInParagraph} 行）的行号须为正整数`,
+      )
+    }
+    const para = byKey.get(d.paragraphKey)
+    directives.push({
+      kind: d.kind,
+      paragraph_id: para ? para.id : d.paragraphIdSnapshot,
+      line_in_paragraph: d.lineInParagraph,
+    })
+  }
   if (errors.length > 0) return { ok: false, errors }
   return {
     ok: true,
@@ -108,6 +136,7 @@ export function buildRequest(draft: Draft): BuildResult {
         keep_with_next: p.keepWithNext,
       })),
       footnotes,
+      directives,
     },
   }
 }

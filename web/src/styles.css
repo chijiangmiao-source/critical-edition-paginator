@@ -153,3 +153,56 @@ table.grid input[type='number'] { width: 72px; }
 }
 .failure-panel h3 { margin-top: 0; color: var(--accent); }
 .failure-panel ul { padding-left: 20px; }
+
+/* 人工版式指令 */
+.hint { font-size: 12px; line-height: 1.5; margin: 4px 0 8px; }
+.row-directive-invalid { background: #fbe4de; outline: 2px solid var(--accent); }
+.directive-invalid-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+.directive-status {
+  margin: 8px 0;
+  font-size: 13px;
+  color: #7a7264;
+}
+
+.release-panel {
+  background: #fdf3d7;
+  border: 1px solid #c9a948;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.release-panel h3 { margin-top: 0; color: #8a6b12; }
+.release-panel ul { padding-left: 20px; }
+.release-confirm {
+  margin-top: 8px;
+  background: #8a6b12;
+  border-color: #8a6b12;
+  color: #fff;
+}
+.release-confirm:hover { background: #a17d16; }
+
+.lock-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: normal;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+
+.failure-note { font-size: 13px; color: #7a7264; }
+.failure-invalid-directives {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--accent);
+  font-size: 13px;
+}
+.failure-invalid-directives h4 { margin: 0 0 6px; font-size: 13px; color: var(--accent); }
+.failure-invalid-directives ul { margin: 0; padding-left: 20px; }

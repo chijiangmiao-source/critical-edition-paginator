@@ -137,3 +137,190 @@ def test_validation_rejects_bad_input():
     for label, payload in cases:
         resp = client.post("/api/paginate", json=payload)
         assert resp.status_code == 422, f"{label} 应返回 422，实际 {resp.status_code}"
+
+
+# ---------- 人工版式指令 ----------
+
+def test_request_without_directives_keeps_exact_old_shape():
+    """无指令旧请求：响应逐字段保持原样（不出现任何指令字段）。"""
+    resp = client.post("/api/paginate", json=base_request())
+    body = resp.json()
+    assert "directives_satisfied" not in body
+    assert "active_directive_count" not in body
+    assert "invalid_directives" not in body
+    assert "released_directives" not in body
+    assert "release_confirmed" not in body
+    # 失败响应同样不带新字段
+    resp2 = client.post("/api/paginate", json=base_request(
+        capacity=3,
+        paragraphs=[
+            {"id": "p1", "lines": 2, "keep_with_next": True},
+            {"id": "p2", "lines": 2, "keep_with_next": False},
+        ],
+        footnotes=[],
+    ))
+    failure = resp2.json()["failure"]
+    assert "invalid_directives" not in failure
+
+
+def test_lock_break_directive_ok_contract():
+    resp = client.post("/api/paginate", json=base_request(
+        directives=[
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 4},
+        ],
+    ))
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["directives_satisfied"] is True
+    assert body["active_directive_count"] == 1
+    assert body["invalid_directives"] == []
+    assert body["released_directives"] == []
+    assert body["release_confirmed"] is True
+    # 锁定段界（p1 末行=第 4 行）：无指令时本就断在 4，结果不变
+    assert body["summary"]["ending_lines"] == [4, 8]
+
+
+def test_no_split_directive_changes_solution():
+    # H=4，单段 6 行，禁止第 3 行后断开 ⇒ 最优从 (3,6) 变为 (2,6)
+    resp = client.post("/api/paginate", json={
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 6, "keep_with_next": False}],
+        "footnotes": [],
+        "directives": [{"kind": "no_split", "paragraph_id": "p1", "line_in_paragraph": 3}],
+    })
+    body = resp.json()
+    assert body["summary"]["ending_lines"] == [2, 6]
+    assert body["directives_satisfied"] is True
+    assert body["invalid_directives"] == []
+
+
+def test_invalid_directives_are_localized_and_others_apply():
+    resp = client.post("/api/paginate", json={
+        "capacity": 10,
+        "paragraphs": [
+            {"id": "p1", "lines": 5, "keep_with_next": False},
+            {"id": "p2", "lines": 5, "keep_with_next": False},
+        ],
+        "footnotes": [],
+        "directives": [
+            {"kind": "lock_break", "paragraph_id": "ghost", "line_in_paragraph": 1},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 9},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 1},
+            {"kind": "no_split", "paragraph_id": "p1", "line_in_paragraph": 5},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 5},
+        ],
+    })
+    body = resp.json()
+    invalid = body["invalid_directives"]
+    assert {(i["order"], i["reason"]) for i in invalid} == {
+        (0, "paragraph_not_found"),
+        (1, "line_out_of_range"),
+        (2, "illegal_position"),
+        (3, "illegal_position"),
+    }
+    assert body["active_directive_count"] == 1
+    assert body["directives_satisfied"] is True
+    assert body["summary"]["ending_lines"] == [5, 10]
+
+
+def test_conflicting_directives_return_release_suggestion():
+    # H=4，单段 6 行，锁定第 2、3 行后：至少释放 1 条，序号字典序取 0。
+    resp = client.post("/api/paginate", json={
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 6, "keep_with_next": False}],
+        "footnotes": [],
+        "directives": [
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 2},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 3},
+        ],
+    })
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["directives_satisfied"] is False
+    assert body["release_confirmed"] is False
+    assert [d["order"] for d in body["released_directives"]] == [0]
+    assert body["released_directives"][0] == {
+        "order": 0, "kind": "lock_break",
+        "paragraph_id": "p1", "line_in_paragraph": 2,
+    }
+    # 建议解仍按既有目标给出可复算预览（保留锁 3 ⇒ 首页结束于 3）
+    assert body["summary"]["ending_lines"] == [3, 6]
+
+
+def test_confirm_release_and_recompute():
+    payload = {
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 6, "keep_with_next": False}],
+        "footnotes": [],
+        "directives": [
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 2},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 3},
+        ],
+    }
+    # 一次确认释放序号 0 后重算
+    payload["release_directives"] = [0]
+    resp = client.post("/api/paginate", json=payload)
+    body = resp.json()
+    # 已确认释放：仍记录被释放指令（故 directives_satisfied=False），但无待确认建议
+    assert body["directives_satisfied"] is False
+    assert body["release_confirmed"] is True
+    assert [d["order"] for d in body["released_directives"]] == [0]
+    assert body["summary"]["ending_lines"] == [3, 6]
+
+
+def test_confirm_insufficient_release_appends_minimum_extra():
+    # 三锁 2、3、4：只确认释放 0（锁2）后锁3、锁4 仍冲突，须再释放 1。
+    resp = client.post("/api/paginate", json={
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 8, "keep_with_next": False}],
+        "footnotes": [],
+        "directives": [
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 2},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 3},
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 4},
+        ],
+        "release_directives": [0],
+    })
+    body = resp.json()
+    # 追加的 1 未经确认 ⇒ 仍为建议态
+    assert body["release_confirmed"] is False
+    assert [d["order"] for d in body["released_directives"]] == [0, 1]
+
+
+def test_base_infeasible_returns_prefix_even_with_directives():
+    resp = client.post("/api/paginate", json={
+        "capacity": 3,
+        "paragraphs": [
+            {"id": "p1", "lines": 2, "keep_with_next": True},
+            {"id": "p2", "lines": 2, "keep_with_next": False},
+        ],
+        "footnotes": [],
+        "directives": [
+            {"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 2},
+            {"kind": "lock_break", "paragraph_id": "ghost", "line_in_paragraph": 1},
+        ],
+    })
+    body = resp.json()
+    assert body["status"] == "infeasible"
+    assert body["failure"]["paragraph_id"] == "p2"
+    # 失效指令仍就地标出，但不混入前缀归因（无 released_directives 字段）
+    assert [i["order"] for i in body["failure"]["invalid_directives"]] == [1]
+    assert "released_directives" not in body
+
+
+def test_validation_rejects_unknown_kind_and_bad_release_index():
+    resp = client.post("/api/paginate", json={
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 6}],
+        "footnotes": [],
+        "directives": [{"kind": "frozen", "paragraph_id": "p1", "line_in_paragraph": 2}],
+    })
+    assert resp.status_code == 422
+    resp = client.post("/api/paginate", json={
+        "capacity": 4,
+        "paragraphs": [{"id": "p1", "lines": 6}],
+        "footnotes": [],
+        "directives": [{"kind": "lock_break", "paragraph_id": "p1", "line_in_paragraph": 2}],
+        "release_directives": [5],
+    })
+    assert resp.status_code == 422
