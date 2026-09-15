@@ -1,0 +1,40 @@
+# 一键启动：前端（web）、后端（api）与一次性校验（verify）。
+# 宿主端口可用环境变量覆盖：WEB_PORT=9000 API_PORT=9001 docker compose up --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: pagination-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: pagination-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  verify:
+    build:
+      context: .
+      dockerfile: docker/verify.Dockerfile
+    image: pagination-verify
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    # 一次性服务：测试跑完即退出，退出码即结果
+    restart: "no"

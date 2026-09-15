@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/FailurePanel.tsx","./src/components/FootnoteEditor.tsx","./src/components/ParagraphEditor.tsx","./src/components/Preview.tsx","./src/lib/api.ts","./src/lib/format.ts","./src/lib/model.ts","./src/lib/types.ts","./src/tests/format.test.ts","./src/tests/model.test.ts"],"version":"5.6.3"}

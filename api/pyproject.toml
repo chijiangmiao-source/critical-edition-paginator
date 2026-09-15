@@ -1,0 +1,9 @@
+[project]
+name = "pagination-api"
+version = "1.0.0"
+description = "古籍校勘版分页计算 API"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
